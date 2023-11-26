@@ -11,14 +11,11 @@ public class HibernateUtil {
     private static SessionFactory sessionFactory;
 
     private static SessionFactory buildSessionFactory() {
-        StandardServiceRegistry standardRegistry = new StandardServiceRegistryBuilder().
-                configure("hibernate.cfg.xml").build();
+        StandardServiceRegistry standardRegistry = new StandardServiceRegistryBuilder().configure("hibernate.cfg.xml").build();
 
-        Metadata metadata = new MetadataSources(standardRegistry).getMetadataBuilder().
-                build();
+        Metadata metadata = new MetadataSources(standardRegistry).getMetadataBuilder().build();
 
         SessionFactoryBuilder sessionFactoryBuilder = metadata.getSessionFactoryBuilder();
-
         SessionFactory sessionFactory = sessionFactoryBuilder.build();
 
         return sessionFactory;

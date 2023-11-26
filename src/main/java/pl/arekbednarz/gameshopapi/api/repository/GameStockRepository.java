@@ -16,11 +16,8 @@ import java.util.Optional;
 @Repository
 public interface GameStockRepository extends PagingAndSortingRepository<GameStock,Long> , CrudRepository<GameStock,Long> {
 
-
-
     @Query(value = "select gs from GameStock gs where gs.game.name = :gameName and gs.platform = :platform")
     Optional<GameStock> findGameStockByGameAndPlatform(@Param("gameName") String gameName, @Param("platform") Platform platform);
-
 
     default GameStock createGameStock(final Long count, final Platform platform, final BigDecimal price,final String imagUrl){
         GameStock gameStock = new GameStock();

@@ -16,11 +16,8 @@ import java.util.Optional;
 @Repository
 public interface GenreRepository extends PagingAndSortingRepository<Genre,Long> , CrudRepository<Genre,Long> {
 
-
-
     @Query(value = "select g from Genre g where g.genreName = :genreName")
     Optional<Genre> findByName(@Param("genreName") String genreName);
-
 
     default Genre createGenre(final String genreName){
         Genre genre = new Genre();

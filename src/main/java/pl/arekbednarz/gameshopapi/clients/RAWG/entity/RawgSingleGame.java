@@ -12,7 +12,6 @@ public @Data class RawgSingleGame {
 
     public static final RawgSingleGame NO_DATA = new RawgSingleGame();
 
-
     @JsonProperty(value="id")
     private Long id;
 

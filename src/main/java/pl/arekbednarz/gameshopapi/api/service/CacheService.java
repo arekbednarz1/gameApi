@@ -18,19 +18,14 @@ public class CacheService {
 
     @Autowired
     private RedisTemplate redisTemplate;
-
     @Autowired
     private RAWGService rawgService;
 
     private static String GAMES_CACHE="GAME";
-
     private static String UPCOMING_GAMES_WEEK = "UPCOMING_WEEK";
     private static String UPCOMING_GAMES_MONTH = "UPCOMING_MONTH";
-
     private static String PUBLISHERS_TEMP_CACHE = "PUBLISHERS";
-
     private static final Jsonb JSONB = JsonbBuilder.create();
-
 
     public void clearCacheGamesNextWeek(){
         clearGameCache(UPCOMING_GAMES_WEEK);

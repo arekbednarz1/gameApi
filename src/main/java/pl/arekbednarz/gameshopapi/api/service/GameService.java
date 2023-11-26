@@ -95,37 +95,44 @@ public class GameService {
 
     private List<Publisher> getPublishers(final GameDto gameDto){
         return gameDto.getPublishers().stream().map(pub-> {
+
             if (publisherRepository.findByName(pub).isPresent()){
                 return publisherRepository.findByName(pub).get();
             }
+
             LOG.infof("Adding new publisher: %s into db", pub);
+
             return publisherRepository.createPublisher(pub);
         }).toList();
     }
 
     private List<Genre> getGenres(final GameDto gameDto){
         return gameDto.getGenres().stream().map(genreName -> {
+
             final var genreDb = genreRepository.findByName(genreName);
+
             if (genreDb.isPresent()){
                 return genreDb.get();
             }
             LOG.infof("Adding new genre ( %s ) into db", genreName);
-            var genre = new Genre();
-            genre.setGenreName(genreName);
+
             return genreRepository.createGenre(genreName);
         }).toList();
     }
 
     private List<GameStock> getGameStocks(final GameDto gameDto){
         return gameDto.getPlatforms().stream().map(platf-> {
+
             final var gameName = gameDto.getName();
             final var gamePlatform = Platform.getPlatformByName(platf);
             final var gameStockDb = gameStockRepository.findGameStockByGameAndPlatform(gameName,gamePlatform);
             final var imageUrl = gameDto.getBackgroundImage();
+
             if (gameStockDb.isPresent()){
                 return gameStockDb.get();
             }
             LOG.infof("Adding new gamestock by platform ( %s ) to game: %s ", platf,gameName);
+
             return gameStockRepository.createGameStock(DEFAULT_COUNT_OF_GAMES,gamePlatform,DEFAULT_PRICE,imageUrl);
         }).toList();
     }
