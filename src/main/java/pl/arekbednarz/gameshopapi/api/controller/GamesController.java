@@ -20,7 +20,7 @@ import java.util.List;
 
 @Tag(name = "games")
 @RestController
-@RequestMapping(path = "/games")
+@RequestMapping(path = "api/v1/games")
 public class GamesController {
 
     @Autowired
@@ -68,7 +68,7 @@ public class GamesController {
 
     @DeleteMapping
     @Operation(summary = "Delete games in cache", description = "Delete all games stored inside cache.")
-    @APIResponse(responseCode = "204", description = "Games from cache deleted")
+    @APIResponse(responseCode = "200", description = "Games from cache deleted")
     @APIResponse(responseCode = "400", description = "Invalid data provided", content = @Content(schema = @Schema(implementation = ErrorDto.class)))
     @APIResponse(responseCode = "404", description = "Entity not found", content = @Content(schema = @Schema(implementation = ErrorDto.class)))
     @APIResponse(responseCode = "500", description = "Internal server error")
@@ -79,14 +79,14 @@ public class GamesController {
     }
 
 
-    @Async
+
     @PutMapping("process-update")
     @Operation(summary = "Execute games data processing", description = "Download, and store games comming in next month into database.")
     @APIResponse(responseCode = "204", description = "Games processed")
     @APIResponse(responseCode = "400", description = "Invalid data provided", content = @Content(schema = @Schema(implementation = ErrorDto.class)))
     @APIResponse(responseCode = "404", description = "Entity not found", content = @Content(schema = @Schema(implementation = ErrorDto.class)))
     @APIResponse(responseCode = "500", description = "Internal server error")
-    public void runDataProcessing() {
+    public void runGamesDataProcessing() {
         gameService.rawgApiGamesListProcessing();
     }
 }

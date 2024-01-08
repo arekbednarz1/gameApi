@@ -27,7 +27,8 @@ import static java.time.temporal.TemporalAdjusters.lastDayOfMonth;
 @Service
 public class GameService {
 
-    private static final Logger LOG = Logger.getLogger(GameService.class);
+    private static final Logger LOG
+            = Logger.getLogger(GameService.class);
 
     private static BigDecimal DEFAULT_PRICE = BigDecimal.valueOf(249);
     private static Long DEFAULT_COUNT_OF_GAMES = 100L;
@@ -72,7 +73,6 @@ public class GameService {
     }
 
     @Transactional
-    @Async
     public void rawgApiSingleGameProcessing(final Long rawgId){
         Optional<Game>gameInDb = gameRepository.findByRawgId(rawgId);
 
