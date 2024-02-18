@@ -1,5 +1,8 @@
 package pl.arekbednarz.gameshopapi.api.controller;
 
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.core.Application;
+import jdk.jfr.ContentType;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
@@ -10,11 +13,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.*;
+import pl.arekbednarz.gameshopapi.api.service.ImageService;
+import pl.arekbednarz.gameshopapi.clients.IGDB.entity.IGDBPlatform;
 import pl.arekbednarz.gameshopapi.dto.ErrorDto;
 import pl.arekbednarz.gameshopapi.dto.GameDto;
 import pl.arekbednarz.gameshopapi.api.mapper.GameMapper;
 import pl.arekbednarz.gameshopapi.api.service.CacheService;
 import pl.arekbednarz.gameshopapi.api.service.GameService;
+import pl.arekbednarz.gameshopapi.dto.IgdbDTO;
 
 import java.util.List;
 
@@ -31,6 +37,9 @@ public class GamesController {
 
     @Autowired
     private GameMapper gameMapper;
+
+    @Autowired
+    private ImageService imageService;
 
     @GetMapping(path = "list")
     @Operation(summary = "List of all games from database", description = "Get list of all games stored inside internal database")
@@ -88,5 +97,15 @@ public class GamesController {
     @APIResponse(responseCode = "500", description = "Internal server error")
     public void runGamesDataProcessing() {
         gameService.rawgApiGamesListProcessing();
+    }
+
+
+    @GetMapping(path = "test")
+    @Operation(summary = "List of all games from database", description = "Get list of all games stored inside internal database")
+    @APIResponse(responseCode = "200", description = "Success")
+    @APIResponse(responseCode = "400", description = "Invalid data provided", content = @Content(schema = @Schema(implementation = ErrorDto.class)))
+    @APIResponse(responseCode = "500", description = "Internal server error")
+    public List<IGDBPlatform> test(@RequestBody IgdbDTO dto){
+        return imageService.getIgdbPlatforms(dto);
     }
 }

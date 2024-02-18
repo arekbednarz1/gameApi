@@ -7,7 +7,8 @@ import org.hibernate.boot.SessionFactoryBuilder;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.MetadataSources;
 
-public class HibernateUtil {
+public class
+HibernateUtil {
     private static SessionFactory sessionFactory;
 
     private static SessionFactory buildSessionFactory() {

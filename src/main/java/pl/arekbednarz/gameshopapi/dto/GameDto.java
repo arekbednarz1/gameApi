@@ -9,7 +9,8 @@ import java.util.List;
 
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public @Data class GameDto {
+public @Data class
+GameDto {
 
     @JsonProperty(value = "game_title")
     private String name;

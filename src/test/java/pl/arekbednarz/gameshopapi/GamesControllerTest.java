@@ -34,7 +34,7 @@ import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 @AutoConfigureMockMvc
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ContextConfiguration(initializers = {RawgApiServerMock.class, MySqlContainerResource.class})
-public class GamesControllerTest {
+public class GamesControllerTest{
 
     @Autowired
     private Jsonb jsonb;
@@ -47,8 +47,7 @@ public class GamesControllerTest {
             .getClass()
             .getGenericSuperclass();
 
-    @SneakyThrows
-    @BeforeAll
+
     static void setup() {
         RestAssured.port = DEFAULT_PORT;
         RestAssured.baseURI = DEFAULT_URI;
@@ -59,12 +58,15 @@ public class GamesControllerTest {
         .then()
             .statusCode(200);
 
-        await().atMost(5, TimeUnit.SECONDS);
     }
 
     @Test
-    void shouldReturnGamesListFromRawgApi() throws Exception {
+    void shouldReturnGamesListFromRawgApi() {
 
+        ExecutorService service = Executors.newFixedThreadPool(2);
+
+        setup();
+        await().atMost(5,TimeUnit.SECONDS);
      // @formatter:off
      final var jsonOutput =
          given()
@@ -74,7 +76,7 @@ public class GamesControllerTest {
              .statusCode(200)
              .extract()
              .asString();
-     // @formatter:on
+        // @formatter:on;
 
      final List<Game>games = jsonb.fromJson(jsonOutput,GAMES_LIST_TYPE);
 

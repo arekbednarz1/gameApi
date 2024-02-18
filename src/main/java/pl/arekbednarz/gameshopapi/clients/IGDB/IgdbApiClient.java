@@ -1,15 +1,9 @@
-package pl.arekbednarz.gameshopapi.clients.RAWG;
+package pl.arekbednarz.gameshopapi.clients.IGDB;
 
 import io.vavr.control.Option;
 import jakarta.json.bind.Jsonb;
 import jakarta.json.bind.JsonbBuilder;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
-import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
@@ -18,14 +12,14 @@ import net.jodah.failsafe.RetryPolicy;
 import net.jodah.failsafe.event.ExecutionAttemptedEvent;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
-
+import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
 import org.eclipse.microprofile.rest.client.RestClientBuilder;
 import org.jboss.logging.Logger;
-
 import org.jboss.resteasy.client.exception.ResteasyWebApplicationException;
 import pl.arekbednarz.gameshopapi.api.error.ApiAuthenticationFailureException;
-import pl.arekbednarz.gameshopapi.clients.RAWG.entity.RawgGamesResults;
-import pl.arekbednarz.gameshopapi.clients.RAWG.entity.RawgSingleGame;
+import pl.arekbednarz.gameshopapi.clients.IGDB.entity.IGDBPlatform;
+import pl.arekbednarz.gameshopapi.clients.IGDB.entity.IGDBPlatforms;
+import pl.arekbednarz.gameshopapi.clients.IGDB.entity.IGDBToken;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,118 +27,82 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.net.URI;
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static net.jodah.failsafe.Failsafe.with;
+import static org.apache.commons.lang3.StringUtils.equalsIgnoreCase;
 import static org.apache.logging.log4j.util.Strings.EMPTY;
-
+import static pl.arekbednarz.gameshopapi.clients.IGDB.IgdbApiClient.RecoverableRequest.execute;
 import static pl.arekbednarz.gameshopapi.utils.WebUtils.unwrap;
 
-import static org.apache.commons.lang3.StringUtils.equalsIgnoreCase;
-import static pl.arekbednarz.gameshopapi.clients.RAWG.RawgApiClient.RecoverableRequest.execute;
+public interface IgdbApiClient {
 
-
-public interface RawgApiClient {
-
-    String DATE_FORMAT = "yyyy-MM-dd";
-    String ORDERING_RELEASE_SORT = "&ordering=-added";
-
-    GamesDataMessageBodyReader GAMES_DATA_READER = new GamesDataMessageBodyReader();
-    SingleGameDataMessageBodyReader GAME_SINGLE_DATA_READER = new SingleGameDataMessageBodyReader();
+    TokenMessageBodyReader TOKEN_MESSAGE_BODY_READER = new TokenMessageBodyReader();
+    PlatformMessageBodyReader PLATFORM_MESSAGE_BODY_READER = new PlatformMessageBodyReader();
 
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    interface GameClient extends AutoCloseable {
+    interface IGDBOauthClient extends AutoCloseable {
 
-        @GET
-        @Path("games")
-        RawgGamesResults getGamesData(
-            final @QueryParam("key") String key,
-            final @QueryParam("dates") String dates,
-            final @QueryParam("ordering") String ordering);
+        @POST
+        @Path("token")
+        IGDBToken getToken(
+                final @QueryParam("client_id") String clientId,
+                final @QueryParam("client_secret") String clientSecret,
+                final @QueryParam("grant_type") String grantType);
+        @Override
+        void close();
+    }
 
-        @GET
-        @Path("games/{gameId}")
-        RawgSingleGame getSingleGameData(
-            final @PathParam("gameId") Long gameId,
-            final @QueryParam("key") String key);
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    interface IGDBClient extends AutoCloseable {
+
+        @POST
+        @Path("platforms")
+        IGDBPlatforms getPlatforms(
+                final @HeaderParam("Client-ID") String clientId,
+                final @HeaderParam("Authorization") String token,
+                final @RequestBody String body);
 
         @Override
         void close();
     }
 
-    static SimplifiedGamesClient newGameClient(final String key) {
-
-
-        final var serviceUrl = RawgApiClientsSettings.rawgApiUrl;
-        final var clientClass = GameClient.class;
-        final var client = create(serviceUrl, clientClass);
-
-        return new SimplifiedGamesClient(key, client);
+    static SimplifiedIGDBOauthClient newOauthClient() {
+        final var oauthUrl = IgdbApiClientsSettings.igdbOauthApiUrl;
+        final var client = createClient(oauthUrl, IGDBOauthClient.class,TOKEN_MESSAGE_BODY_READER);
+        return new SimplifiedIGDBOauthClient(client);
     }
 
-    static <T extends AutoCloseable> T create(final String url, final Class<T> clazz) {
+    static SimplifiedIGDBClient newIgdbClient() {
+        final var oauthUrl = IgdbApiClientsSettings.igdbApiUrl;
+        final var client = createClient(oauthUrl, IGDBClient.class,PLATFORM_MESSAGE_BODY_READER);
+        return new SimplifiedIGDBClient(client);
+    }
+
+    static <T extends AutoCloseable> T createClient(String url, Class<T> clazz, Object reader) {
         var clientBulder =  RestClientBuilder.newBuilder()
                 .baseUri(URI.create(url))
-                .register(GAMES_DATA_READER)
-                .register(GAME_SINGLE_DATA_READER)
+                .register(reader)
                 .connectTimeout(15, TimeUnit.MINUTES)
                 .readTimeout(15, TimeUnit.MINUTES)
                 .build(clazz);
-
         return clientBulder;
     }
 
-    class SimplifiedGamesClient implements AutoCloseable {
+
+    class SimplifiedClientBasic {
 
         private static final int NOT_FOUND = Response.Status.NOT_FOUND.getStatusCode();
         private static final int FORBIDDEN = Response.Status.FORBIDDEN.getStatusCode();
-        private static final String NO_DATA_INDICATOR = "Data does not exist for specified game id";
         private static final String AUTHENTICATION_FAILED = "Authentication Failed";
+        private static final String AUTHENTICATION_FAILED_EMPTY_TOKEN = "Cannot get token for that credentials";
 
-        private final GameClient client;
-        private final String key;
-
-        private SimplifiedGamesClient(final String key, final GameClient client) {
-            this.key = key;
-            this.client = client;
-        }
-
-        public RawgGamesResults getGamesData(final LocalDate day1, final LocalDate day2) {
-
-            final var dateFormatter = DateTimeFormatter.ofPattern(DATE_FORMAT);
-            final String start = dateFormatter.format(day1);
-            final String end = dateFormatter.format(day2);
-
-            var dates = start + "," + end;
-
-            return execute(() -> client.getGamesData(key, dates, ORDERING_RELEASE_SORT));
-        }
-
-        public RawgSingleGame getSingleGameData(final Long gameId) {
-            try {
-                return execute(() -> client.getSingleGameData(gameId, key));
-            } catch (final WebApplicationException ex) {
-                return recoverFromError(unwrap(ex));
-            }
-        }
-
-        private RawgSingleGame recoverFromError(final WebApplicationException e) {
-
-            if (isNoDataForSpecifiedDateError(e)) {
-                return RawgSingleGame.NO_DATA;
-            }
-            if (isAuthenticationFailure(e)) {
-                throw new ApiAuthenticationFailureException(e);
-            }
-            throw e;
-        }
-
-        private static boolean isNoDataForSpecifiedDateError(final WebApplicationException e) {
+        protected static boolean isNoDataForSpecifiedError(final WebApplicationException e) {
 
             final var response = e.getResponse();
             final var status = response.getStatus();
@@ -155,10 +113,10 @@ public interface RawgApiClient {
 
             final var error = readError(response);
 
-            return error.startsWith(NO_DATA_INDICATOR);
+            return error.startsWith(AUTHENTICATION_FAILED_EMPTY_TOKEN);
         }
 
-        private static boolean isAuthenticationFailure(final WebApplicationException e) {
+        protected static boolean isAuthenticationFailure(final WebApplicationException e) {
 
             final var response = e.getResponse();
             final var status = response.getStatus();
@@ -172,18 +130,76 @@ public interface RawgApiClient {
             return equalsIgnoreCase(error, AUTHENTICATION_FAILED);
         }
 
-        private static String readError(final Response response) {
+        protected static String readError(final Response response) {
             return readErrorFromEntityBody(response).getOrElse(StringUtils.EMPTY);
         }
 
-        private static Option<String> readErrorFromEntityBody(final Response response) {
+        protected static Option<String> readErrorFromEntityBody(final Response response) {
             if (response.hasEntity()) {
                 return Option.of(response.readEntity(String.class));
             } else {
                 return Option.none();
             }
         }
+    }
 
+    class SimplifiedIGDBOauthClient extends SimplifiedClientBasic implements AutoCloseable{
+
+        private final IGDBOauthClient client;
+
+        private SimplifiedIGDBOauthClient(final IGDBOauthClient client) {
+            this.client = client;
+        }
+
+        protected IGDBToken recoverFromError(final WebApplicationException e) {
+
+            if (isNoDataForSpecifiedError(e)) {
+                return IGDBToken.NO_DATA;
+            }
+            if (isAuthenticationFailure(e)) {
+                throw new ApiAuthenticationFailureException(e);
+            }
+            throw e;
+        }
+        public IGDBToken getToken(final String clientId, final String clientSecret, final String grantType) {
+            try {
+                return execute(() -> client.getToken(clientId,clientSecret,grantType));
+            } catch (final WebApplicationException ex) {
+                return recoverFromError(unwrap(ex));
+            }
+        }
+        @Override
+        public void close() {
+            client.close();
+        }
+    }
+
+    class SimplifiedIGDBClient extends SimplifiedClientBasic implements AutoCloseable{
+
+        private final IGDBClient client;
+
+        private SimplifiedIGDBClient(final IGDBClient client) {
+            this.client = client;
+        }
+
+        private IGDBPlatforms recoverFromError(final WebApplicationException e) {
+
+            if (isNoDataForSpecifiedError(e)) {
+                return IGDBPlatforms.NO_DATA;
+            }
+            if (isAuthenticationFailure(e)) {
+                throw new ApiAuthenticationFailureException(e);
+            }
+            throw e;
+        }
+
+        public IGDBPlatforms getPlatforms(final String clientId, final String token, final String body) {
+            try {
+                return execute(() -> client.getPlatforms(clientId,token,body));
+            } catch (final WebApplicationException ex) {
+                return recoverFromError(unwrap(ex));
+            }
+        }
         @Override
         public void close() {
             client.close();
@@ -194,7 +210,7 @@ public interface RawgApiClient {
 
         private static final int ISE_STATUS_CODE = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
 
-        private static final Logger LOG = Logger.getLogger(RecoverableRequest.class);
+        private static final Logger LOG = Logger.getLogger(IgdbApiClient.RecoverableRequest.class);
 
         private static final int UNKNOWN_STATUS = -1;
         private static final int MAX_ATTEMPT_COUNT = 5;
@@ -206,8 +222,8 @@ public interface RawgApiClient {
         static <T> T execute(final Supplier<T> operation) {
 
             final var policy = new RetryPolicy<T>()
-                    .handleIf(RecoverableRequest::isError5xx)
-                    .onFailedAttempt(RecoverableRequest::logError)
+                    .handleIf(IgdbApiClient.RecoverableRequest::isError5xx)
+                    .onFailedAttempt(IgdbApiClient.RecoverableRequest::logError)
                     .withMaxRetries(MAX_ATTEMPT_COUNT)
                     .withDelay(DELAY_5_SECONDS);
 
@@ -274,18 +290,17 @@ public interface RawgApiClient {
         }
     }
 
-    class GamesDataMessageBodyReader implements MessageBodyReader<RawgGamesResults> {
+    class TokenMessageBodyReader implements MessageBodyReader<IGDBToken> {
 
         private static final Jsonb JSONB = JsonbBuilder.create();
 
-
         @Override
         public boolean isReadable(Class<?> aClass, Type type, Annotation[] annotations, MediaType mediaType) {
-            return type == RawgGamesResults.class;
+            return type == IGDBToken.class;
         }
 
         @Override
-        public RawgGamesResults readFrom(Class<RawgGamesResults> aClass, Type type, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> multivaluedMap, InputStream inputStream) throws IOException, WebApplicationException {
+        public IGDBToken readFrom(Class<IGDBToken> aClass, Type type, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> multivaluedMap, InputStream inputStream) throws IOException, WebApplicationException {
             return unmarshall(readJsonFrom(inputStream));
         }
 
@@ -293,23 +308,22 @@ public interface RawgApiClient {
             return IOUtils.toString(is, UTF_8);
         }
 
-        private RawgGamesResults unmarshall(final String json) {
-            return JSONB.fromJson(json, RawgGamesResults.class);
+        private IGDBToken unmarshall(final String json) {
+            return JSONB.fromJson(json, IGDBToken.class);
         }
     }
 
-    class SingleGameDataMessageBodyReader implements MessageBodyReader<RawgSingleGame> {
+    class PlatformMessageBodyReader implements MessageBodyReader<IGDBPlatforms> {
 
         private static final Jsonb JSONB = JsonbBuilder.create();
 
-
         @Override
         public boolean isReadable(Class<?> aClass, Type type, Annotation[] annotations, MediaType mediaType) {
-            return type == RawgSingleGame.class;
+            return type == IGDBPlatforms.class;
         }
 
         @Override
-        public RawgSingleGame readFrom(Class<RawgSingleGame> aClass, Type type, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> multivaluedMap, InputStream inputStream) throws IOException, WebApplicationException {
+        public IGDBPlatforms readFrom(Class<IGDBPlatforms> aClass, Type type, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, String> multivaluedMap, InputStream inputStream) throws IOException, WebApplicationException {
             return unmarshall(readJsonFrom(inputStream));
         }
 
@@ -317,8 +331,8 @@ public interface RawgApiClient {
             return IOUtils.toString(is, UTF_8);
         }
 
-        private RawgSingleGame unmarshall(final String json) {
-            return JSONB.fromJson(json, RawgSingleGame.class);
+        private IGDBPlatforms unmarshall(final String json) {
+            return new IGDBPlatforms(JSONB.fromJson(json,new ArrayList<IGDBPlatform>(){}.getClass().getGenericSuperclass()));
         }
     }
 }
